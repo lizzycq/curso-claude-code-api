@@ -27,11 +27,14 @@ Proyectos, tareas, filtros, `due_at`, skills, hooks y verificación automatizada
   sentidos, tests de persistencia contra PostgreSQL y nunca contra SQLite, y
   que toda capacidad nueva empiece por un test que falla.
 
-## Decisión abierta
+## Decisión tomada
 
-Driver y capa de acceso. Propuesta: acceso **async** con SQLAlchemy 2.x y
-`asyncpg`, coherente con la app y los tests async que ya existen. Se confirma
-antes del incremento 1.
+Driver y capa de acceso: acceso **async** con SQLAlchemy 2.x y `asyncpg`.
+
+Encaja con lo que ya existe en el repositorio porque `app/main.py` y
+`tests/test_health.py` ya son async, así que la capa de acceso a datos queda
+en el mismo estilo que el resto de la app en vez de mezclar código
+síncrono y asíncrono.
 
 ## Incrementos
 
