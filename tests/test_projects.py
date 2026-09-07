@@ -4,6 +4,9 @@ from app.main import app
 
 INVISIBLE_UNICODE = "\u200b"
 
+# El 409 al borrar un proyecto con tareas queda fuera de alcance hasta que
+# exista la tabla tasks; ver docs/plan-projects.md ("Fuera de alcance").
+
 
 def _crear(client: TestClient, name: str, description: str | None = None) -> dict:
     cuerpo: dict[str, object] = {"name": name}
@@ -29,6 +32,16 @@ def test_post_projects_descripcion_opcional_es_null():
     response = client.post("/projects", json={"name": "Casa"})
 
     assert response.json()["description"] is None
+
+
+def test_post_projects_esquema_exacto():
+    client = TestClient(app)
+
+    cuerpo = client.post(
+        "/projects", json={"name": "Casa", "description": "principal"}
+    ).json()
+
+    assert set(cuerpo.keys()) == {"id", "name", "description"}
 
 
 def test_post_projects_name_solo_espacios_es_422():
