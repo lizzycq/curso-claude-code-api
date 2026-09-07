@@ -3,14 +3,35 @@ from sqlalchemy import text
 
 from app.db import engine
 
-# Los tests de projects escriben en la base. Se asume que la migración de
-# projects (d5a2008b4631) ya está aplicada, igual que hoy se asume la de
-# states para tests/test_states.py. Si se corre pytest sin `alembic upgrade
-# head` previo, este fixture falla en el TRUNCATE.
+# Los tests de projects y tasks escriben en la base. Se asume que las
+# migraciones ya están aplicadas, igual que hoy se asume la de states para
+# tests/test_states.py.
+#
+# Los tests de migración (test_*_migracion.py) hacen downgrade/upgrade y
+# pueden dejar la base sin `tasks` momentáneamente entre casos; por eso el
+# fixture trunca solo las tablas que existen en ese momento.
+
+_TABLAS_ESCRIBIBLES = ("tasks", "projects")
 
 
 @pytest.fixture(autouse=True)
-def _limpia_projects():
+def _limpia_tablas_escribibles():
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE projects RESTART IDENTITY CASCADE"))
+        existentes = [
+            tabla
+            for tabla in _TABLAS_ESCRIBIBLES
+            if conn.execute(
+                text(
+                    "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+                    "WHERE table_name = :nombre)"
+                ),
+                {"nombre": tabla},
+            ).scalar()
+        ]
+        if existentes:
+            conn.execute(
+                text(
+                    f"TRUNCATE {', '.join(existentes)} RESTART IDENTITY CASCADE"
+                )
+            )
     yield
