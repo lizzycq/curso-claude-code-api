@@ -390,3 +390,27 @@ def test_delete_task_inexistente_404():
     assert response.status_code == 404
     assert "detail" in response.json()
 
+
+
+def test_delete_proyecto_con_tareas_responde_409():
+    client = TestClient(app)
+    pid = _crear_proyecto(client)
+    _crear_tarea(client, pid)
+
+    response = client.delete(f"/projects/{pid}")
+
+    assert response.status_code == 409
+    assert "detail" in response.json()
+    # el proyecto y su tarea siguen existiendo
+    assert client.get(f"/projects/{pid}").status_code == 200
+    assert len(client.get(f"/tasks?project_id={pid}").json()) == 1
+
+
+def test_delete_proyecto_sin_tareas_responde_204():
+    client = TestClient(app)
+    pid = _crear_proyecto(client)
+
+    response = client.delete(f"/projects/{pid}")
+
+    assert response.status_code == 204
+    assert client.get(f"/projects/{pid}").status_code == 404

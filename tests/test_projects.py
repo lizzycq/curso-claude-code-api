@@ -4,8 +4,9 @@ from app.main import app
 
 INVISIBLE_UNICODE = "\u200b"
 
-# El 409 al borrar un proyecto con tareas queda fuera de alcance hasta que
-# exista la tabla tasks; ver docs/plan-projects.md ("Fuera de alcance").
+# El 409 al borrar un proyecto con tareas se ejercita en
+# tests/test_tasks.py::test_delete_proyecto_con_tareas_responde_409
+# (necesita crear una tarea).
 
 
 def _crear(client: TestClient, name: str, description: str | None = None) -> dict:

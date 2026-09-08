@@ -94,6 +94,14 @@ def update_project(project_id: int, payload: ProjectUpdate) -> ProjectOut:
 def delete_project(project_id: int) -> None:
     with SessionLocal() as session:
         proyecto = _get_project_or_404(session, project_id)
+        tiene_tareas = session.scalar(
+            select(Task.id).where(Task.project_id == project_id).limit(1)
+        )
+        if tiene_tareas is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="el proyecto tiene tareas y no se puede borrar",
+            )
         session.delete(proyecto)
         session.commit()
 
