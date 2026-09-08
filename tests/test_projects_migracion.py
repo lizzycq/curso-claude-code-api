@@ -52,7 +52,9 @@ def test_migracion_crea_tabla_projects():
 
 def test_downgrade_projects_deja_states_intacto():
     _alembic("upgrade", "head")
-    _alembic("downgrade", "-1")
+    # Revertir hasta la revisión previa a projects. No se usa "-1" porque
+    # tasks se encadena por encima de projects; "-1" ya no la elimina.
+    _alembic("downgrade", REVISION_PREVIA)
 
     assert _tabla_existe("projects") is False
     assert _tabla_existe("states") is True
