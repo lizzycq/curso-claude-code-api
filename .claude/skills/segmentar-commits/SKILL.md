@@ -65,13 +65,23 @@ no el diff entero.
 6. **Enseñar el reparto** como una tabla: nº de commit, prefijo + asunto,
    archivos (o `archivo (parcial)`), y una línea de "estado tras este commit".
    **Esperar aprobación.**
-7. Tras el visto bueno, y solo entonces, aplicar los commits en orden
-   (`git add` de las rutas de cada grupo, `git add -p` donde haya archivos
-   partidos, `git commit`). Verificar con `git log --oneline` y `git status`
-   que el árbol queda limpio.
+7. Tras el visto bueno, y solo entonces, aplicar los commits en orden. Cada
+   commit se arma **exclusivamente con `git add`** sobre el cambio que ya
+   está en el árbol: la ruta completa cuando el archivo entero va a ese
+   commit, o `git add -p` cuando un archivo está partido entre commits.
+   Nunca se edita, revierte ni reescribe una línea para preparar un commit
+   ni para reconstruir un estado intermedio. Luego `git commit`. Verificar
+   con `git log --oneline` y `git status` que el árbol queda limpio.
 
 ## Límites
 
+- **Nunca reescribe código.** Cada commit se arma solo seleccionando lo que
+  ya existe en el árbol (`git add` completo o `git add -p`), jamás editando,
+  revirtiendo ni regenerando archivos. Si un estado intermedio comprobable
+  no se alcanza solo seleccionando —porque el código y sus tests viven en
+  archivos separados, por ejemplo—, eso se resuelve en el reparto (menos
+  commits, o poner primero el que arrastra a los demás), no tocando el
+  contenido.
 - No confirma, no hace `rebase`, no reescribe historia ya publicada, no hace
   `push`.
 - No descarta ni recupera cambios (`checkout`, `restore`, `stash pop`) sin que
