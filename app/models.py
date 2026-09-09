@@ -35,5 +35,5 @@ class Task(Base):
         Integer, ForeignKey("states.id"), nullable=False
     )
     due_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True), nullable=True, index=True
     )

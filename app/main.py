@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -131,6 +133,10 @@ def _get_task_or_404(session: Session, task_id: int) -> Task:
     return tarea
 
 
+def _id_estado_hecha(session: Session) -> int:
+    return session.scalar(select(State.id).where(State.code == "HECHA"))
+
+
 @app.post("/tasks", status_code=201)
 def create_task(payload: TaskIn) -> TaskOut:
     with SessionLocal() as session:
@@ -150,7 +156,9 @@ def create_task(payload: TaskIn) -> TaskOut:
 
 @app.get("/tasks")
 def list_tasks(
-    project_id: int | None = None, state_id: int | None = None
+    project_id: int | None = None,
+    state_id: int | None = None,
+    overdue: bool | None = None,
 ) -> list[TaskOut]:
     with SessionLocal() as session:
         consulta = select(Task)
@@ -158,6 +166,14 @@ def list_tasks(
             consulta = consulta.where(Task.project_id == project_id)
         if state_id is not None:
             consulta = consulta.where(Task.state_id == state_id)
+        if overdue:
+            # Vencida = con fecha, anterior a ahora (UTC) y sin estado HECHA.
+            # Una tarea sin due_at nunca está vencida.
+            consulta = consulta.where(
+                Task.due_at.is_not(None),
+                Task.due_at < datetime.now(UTC),
+                Task.state_id != _id_estado_hecha(session),
+            )
         tareas = session.scalars(consulta.order_by(Task.id)).all()
         return [_a_task_out(tarea) for tarea in tareas]
 

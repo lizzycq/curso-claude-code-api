@@ -4,6 +4,10 @@ from app.main import app
 
 INVISIBLE_UNICODE = "\u200b"
 CAMPOS_TASK = {"id", "title", "description", "project_id", "state_id", "due_at"}
+# Cat\u00e1logo sembrado por la migraci\u00f3n: PENDIENTE=1, EN_CURSO=2, BLOQUEADA=3, HECHA=4.
+STATE_HECHA = 4
+PASADO = "2020-01-01T00:00:00+00:00"
+FUTURO = "2999-01-01T00:00:00+00:00"
 
 
 def _crear_proyecto(client: TestClient, name: str = "Casa") -> int:
@@ -414,3 +418,59 @@ def test_delete_proyecto_sin_tareas_responde_204():
 
     assert response.status_code == 204
     assert client.get(f"/projects/{pid}").status_code == 404
+
+
+def test_get_tasks_overdue_solo_vencidas_no_hechas():
+    client = TestClient(app)
+    pid = _crear_proyecto(client)
+    vencida = _crear_tarea(client, pid, title="vencida", due_at=PASADO)
+    _crear_tarea(client, pid, title="vencida hecha", state_id=STATE_HECHA, due_at=PASADO)
+    _crear_tarea(client, pid, title="futura", due_at=FUTURO)
+    _crear_tarea(client, pid, title="sin fecha")
+
+    ids = [t["id"] for t in client.get("/tasks?overdue=true").json()]
+
+    assert ids == [vencida["id"]]
+
+
+def test_get_tasks_overdue_false_u_omitido_no_filtra():
+    client = TestClient(app)
+    pid = _crear_proyecto(client)
+    _crear_tarea(client, pid, title="vencida", due_at=PASADO)
+    _crear_tarea(client, pid, title="futura", due_at=FUTURO)
+
+    assert len(client.get("/tasks").json()) == 2
+    assert len(client.get("/tasks?overdue=false").json()) == 2
+
+
+def test_get_tasks_overdue_combinado_con_project_id():
+    client = TestClient(app)
+    p1 = _crear_proyecto(client, "P1")
+    p2 = _crear_proyecto(client, "P2")
+    v1 = _crear_tarea(client, p1, title="v1", due_at=PASADO)
+    _crear_tarea(client, p2, title="v2", due_at=PASADO)
+
+    ids = [t["id"] for t in client.get(f"/tasks?overdue=true&project_id={p1}").json()]
+
+    assert ids == [v1["id"]]
+
+
+def test_get_tasks_overdue_orden_estable_entre_llamadas():
+    client = TestClient(app)
+    pid = _crear_proyecto(client)
+    for titulo in ("C", "A", "B"):
+        _crear_tarea(client, pid, title=titulo, due_at=PASADO)
+
+    primera = [t["id"] for t in client.get("/tasks?overdue=true").json()]
+    segunda = [t["id"] for t in client.get("/tasks?overdue=true").json()]
+
+    assert primera == segunda == sorted(primera)
+
+
+def test_get_tasks_overdue_esquema_exacto():
+    client = TestClient(app)
+    pid = _crear_proyecto(client)
+    _crear_tarea(client, pid, due_at=PASADO)
+
+    for tarea in client.get("/tasks?overdue=true").json():
+        assert set(tarea.keys()) == CAMPOS_TASK
