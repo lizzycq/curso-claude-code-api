@@ -5,9 +5,8 @@ from sqlalchemy import text
 
 from app.db import engine
 
-REVISION_PROJECTS = "d5a2008b4631"
-REVISION_PREVIA = "a44fff1d0719"
-CODIGOS_ESTADOS = {"PENDIENTE", "EN_CURSO", "BLOQUEADA", "HECHA"}
+REVISION_TASKS = "2a9e2f058eef"
+REVISION_PREVIA = "d5a2008b4631"
 
 
 def _alembic(*args: str) -> None:
@@ -30,41 +29,51 @@ def _tabla_existe(nombre: str) -> bool:
         ).scalar()
 
 
-def test_migracion_crea_tabla_projects():
+def test_migracion_crea_tabla_tasks():
     _alembic("upgrade", "head")
 
-    assert _tabla_existe("projects") is True
+    assert _tabla_existe("tasks") is True
 
     with engine.connect() as conn:
         columnas = {
             fila[0]: fila[1]
             for fila in conn.execute(
                 text(
-                    "SELECT column_name, is_nullable FROM information_schema.columns "
-                    "WHERE table_name = 'projects'"
+                    "SELECT column_name, data_type FROM information_schema.columns "
+                    "WHERE table_name = 'tasks'"
                 )
             ).all()
         }
-    assert set(columnas) == {"id", "name", "description"}
-    assert columnas["name"] == "NO"
-    assert columnas["description"] == "YES"
+        fks = conn.execute(
+            text(
+                "SELECT constraint_name FROM information_schema.table_constraints "
+                "WHERE table_name = 'tasks' AND constraint_type = 'FOREIGN KEY'"
+            )
+        ).scalars().all()
+    assert set(columnas) == {
+        "id",
+        "title",
+        "description",
+        "project_id",
+        "state_id",
+        "due_at",
+    }
+    assert columnas["due_at"] == "timestamp with time zone"
+    assert set(fks) == {"fk_tasks_project_id", "fk_tasks_state_id"}
 
 
-def test_downgrade_projects_deja_states_intacto():
+def test_downgrade_tasks_deja_projects_y_states_intactos():
     _alembic("upgrade", "head")
-    # Revertir hasta la revisión previa a projects. No se usa "-1" porque
-    # tasks se encadena por encima de projects; "-1" ya no la elimina.
-    _alembic("downgrade", REVISION_PREVIA)
+    _alembic("downgrade", "-1")
 
-    assert _tabla_existe("projects") is False
+    assert _tabla_existe("tasks") is False
+    assert _tabla_existe("projects") is True
     assert _tabla_existe("states") is True
 
     with engine.connect() as conn:
-        codigos = conn.execute(text("SELECT code FROM states")).scalars().all()
         revision = conn.execute(
             text("SELECT version_num FROM alembic_version")
         ).scalar()
-    assert set(codigos) == CODIGOS_ESTADOS
     assert revision == REVISION_PREVIA
 
     _alembic("upgrade", "head")
