@@ -71,6 +71,31 @@ def test_get_tasks_filtrado_y_orden_estable(client, project_id):
     assert primera == segunda == sorted(primera)
 
 
+def test_get_tasks_overdue(client, project_id):
+    vencida = client.post(
+        "/tasks",
+        json={
+            "title": "vencida",
+            "project_id": project_id,
+            "state_id": 1,
+            "due_at": "2020-01-01T00:00:00+00:00",
+        },
+    ).json()
+    client.post(
+        "/tasks",
+        json={
+            "title": "futura",
+            "project_id": project_id,
+            "state_id": 1,
+            "due_at": "2999-01-01T00:00:00+00:00",
+        },
+    )
+
+    ids = [t["id"] for t in client.get("/tasks?overdue=true").json()]
+
+    assert ids == [vencida["id"]]
+
+
 def test_post_task_project_inexistente_404(client):
     response = client.post(
         "/tasks", json={"title": "X", "project_id": 999999, "state_id": 1}
