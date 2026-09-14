@@ -1,0 +1,180 @@
+### TaskFlow API — recorrido completo del contrato
+### Fuente: docs/contrato-api.md
+###
+### Requisitos (README.md): `docker compose up -d`, `uv run alembic upgrade
+### head`, `uv run uvicorn app.main:app --reload` (sirve en 127.0.0.1:8000).
+###
+### Formato: bloques REST Client (VS Code). Cada petición con `# @name` deja
+### su respuesta disponible para las siguientes vía
+### `{{nombre.response.body.$.campo}}`. El orden respeta las dependencias:
+### primero lo que las siguientes necesitan (estados antes que tareas,
+### proyecto antes que tareas, creación antes que lectura/edición/borrado).
+
+@baseUrl = http://127.0.0.1:8000
+
+### ============================================================
+### SALUD — docs/contrato-api.md, sección "Salud"
+### ============================================================
+
+### GET /health -> 200 {"status":"ok"}
+GET {{baseUrl}}/health
+
+
+### ============================================================
+### ESTADOS — sección "Estados": catálogo cerrado, sin endpoints propios
+### de creación/borrado. Se usa aquí solo para obtener un `state_id` real
+### para las tareas.
+### ============================================================
+
+### GET /states -> 200, lista ordenada por el campo de orden del catálogo
+### y `id` como desempate. Por ese orden ("Catálogo fijo: PENDIENTE,
+### EN_CURSO, BLOQUEADA, HECHA"), el primer elemento es PENDIENTE.
+# @name getStates
+GET {{baseUrl}}/states
+
+### No hay caso de error para /states: el contrato no define endpoints de
+### escritura ni de lectura por id para este recurso ("No tiene endpoints").
+
+
+### ============================================================
+### PROYECTOS — sección "Proyectos"
+### ============================================================
+
+### POST /projects -> 201 con el recurso creado
+# @name createProject
+POST {{baseUrl}}/projects
+Content-Type: application/json
+
+{
+  "name": "Casa"
+}
+
+### POST /projects (error de validación) -> 422
+### `name` sin ningún carácter visible tras normalizar (sección
+### "Normalización de texto"): no basta con que la clave exista, el
+### contenido debe dejar al menos un carácter fuera de las categorías
+### Unicode Cc, Cf, Zl, Zp, Zs.
+POST {{baseUrl}}/projects
+Content-Type: application/json
+
+{
+  "name": "   "
+}
+
+### GET /projects -> 200, orden determinista por `id` ascendente
+GET {{baseUrl}}/projects
+
+### GET /projects/{id} -> 200 con el proyecto creado arriba
+GET {{baseUrl}}/projects/{{createProject.response.body.$.id}}
+
+### GET /projects/{id} (id inexistente) -> 404
+GET {{baseUrl}}/projects/999999
+
+### PATCH /projects/{id} -> 200, actualización parcial
+PATCH {{baseUrl}}/projects/{{createProject.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "description": "con jardín"
+}
+
+### DELETE /projects/{id} queda al final de este archivo: el contrato exige
+### `409` si el proyecto tiene tareas, así que primero hay que crearlas
+### (sección Tareas) y solo después intentar —y lograr— el borrado.
+
+
+### ============================================================
+### TAREAS v1 y v2 — secciones "Tareas v1" y "Tareas v2: Fechas Límite"
+### ============================================================
+
+### POST /tasks -> 201; tarea v1 (sin `due_at`, compatible hacia atrás)
+# @name createTask1
+POST {{baseUrl}}/tasks
+Content-Type: application/json
+
+{
+  "title": "Regar las plantas",
+  "project_id": {{createProject.response.body.$.id}},
+  "state_id": {{getStates.response.body.$[0].id}}
+}
+
+### POST /tasks -> 201; tarea v2 con `due_at` en el pasado y zona horaria
+### explícita (se normaliza a UTC al guardar). Queda vencida para el
+### filtro `overdue` de más abajo.
+# @name createTask2
+POST {{baseUrl}}/tasks
+Content-Type: application/json
+
+{
+  "title": "Pagar el alquiler",
+  "project_id": {{createProject.response.body.$.id}},
+  "state_id": {{getStates.response.body.$[0].id}},
+  "due_at": "2020-01-01T00:00:00-05:00"
+}
+
+### POST /tasks (error de validación) -> 422
+### `due_at` sin zona horaria: "es ambigua, y el contrato no supone
+### ninguna por su cuenta".
+POST {{baseUrl}}/tasks
+Content-Type: application/json
+
+{
+  "title": "Fecha sin zona",
+  "project_id": {{createProject.response.body.$.id}},
+  "state_id": {{getStates.response.body.$[0].id}},
+  "due_at": "2026-03-01T09:00:00"
+}
+
+### POST /tasks (referencia inexistente) -> 404
+### "Una referencia a proyecto o estado inexistente no se crea
+### implícitamente".
+POST {{baseUrl}}/tasks
+Content-Type: application/json
+
+{
+  "title": "Proyecto que no existe",
+  "project_id": 999999,
+  "state_id": {{getStates.response.body.$[0].id}}
+}
+
+### GET /tasks -> 200, lista completa ordenada por `id`
+GET {{baseUrl}}/tasks
+
+### GET /tasks?project_id=&state_id= -> 200, filtros combinados
+GET {{baseUrl}}/tasks?project_id={{createProject.response.body.$.id}}&state_id={{getStates.response.body.$[0].id}}
+
+### GET /tasks?overdue=true -> 200 (v2)
+### Devuelve solo la tarea con `due_at` en el pasado y estado distinto de
+### HECHA: aquí, la segunda tarea creada arriba.
+GET {{baseUrl}}/tasks?overdue=true
+
+### GET /tasks/{id} -> 200
+GET {{baseUrl}}/tasks/{{createTask1.response.body.$.id}}
+
+### GET /tasks/{id} (id inexistente) -> 404
+GET {{baseUrl}}/tasks/999999
+
+### PATCH /tasks/{id} -> 200, actualización parcial consistente (v2)
+### Añade `due_at` con zona horaria; la respuesta lo serializa siempre en
+### UTC con `Z`, sin desplazamiento y sin microsegundos.
+PATCH {{baseUrl}}/tasks/{{createTask1.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "due_at": "2026-03-01T09:00:00+00:00"
+}
+
+### DELETE /tasks/{id} -> 204 sin cuerpo (borra la segunda tarea)
+DELETE {{baseUrl}}/tasks/{{createTask2.response.body.$.id}}
+
+### DELETE /projects/{id} (conflicto) -> 409
+### El proyecto todavía tiene la primera tarea: "no hay borrado en
+### cascada implícito".
+DELETE {{baseUrl}}/projects/{{createProject.response.body.$.id}}
+
+### DELETE /tasks/{id} -> 204 sin cuerpo (borra la primera tarea)
+DELETE {{baseUrl}}/tasks/{{createTask1.response.body.$.id}}
+
+### DELETE /projects/{id} -> 204 sin cuerpo
+### Ahora el proyecto no tiene tareas: el borrado se completa.
+DELETE {{baseUrl}}/projects/{{createProject.response.body.$.id}}
